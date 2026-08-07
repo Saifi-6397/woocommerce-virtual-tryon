@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: WooCommerce Virtual Try-On Studio
- * Plugin URI:   https://yourdomain.com/wc-virtual-tryon
+ * Plugin Name: WooCommerce Virtual Try-On
+ * Plugin URI:   https://github.com/Saifi-6397/woocommerce-virtual-tryon
  * Description: AI-powered Virtual Try-On plugin for WooCommerce using OpenAI.
  * Version:     1.0.0
  * Author:      Khaleel Ahmad
@@ -9,7 +9,7 @@
  */
 
 if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly
+    exit;
 }
 
 class WCVirtualTryOn {
@@ -241,7 +241,6 @@ public function render_tryon_button() {
 
         $body .= '--' . $boundary . '--';
 
-        // Call OpenAI Images Edit API with 90 Second Timeout
         $response = wp_remote_post('https://api.openai.com/v1/images/edits', array(
             'method'    => 'POST',
             'headers'   => $headers,
@@ -276,5 +275,4 @@ public function render_tryon_button() {
     }
 }
 
-// Initialize Plugin
 new WCVirtualTryOn();
