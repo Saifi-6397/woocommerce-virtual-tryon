@@ -118,7 +118,7 @@
 
 .vton-generate-btn {
     width: 100%;
-    padding: 10px 14px;
+    padding: 8px 14px;
     background: #111827;
     color: #ffffff !important;
     border: none;
@@ -166,4 +166,18 @@
 }
 input#vton-user-input,#vton-custom-product-input,#vton-user-reinput {
     display: none;
+}
+
+.vton-generate-btn {
+    transition: background 0.3s ease, transform 0.1s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.vton-generate-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+.vton-generate-btn:hover:not(:disabled) {
+    opacity: 0.95;
 }
