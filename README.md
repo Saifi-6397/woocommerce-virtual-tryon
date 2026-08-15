@@ -4,17 +4,6 @@ An AI-powered Virtual Try-On plugin for WooCommerce stores powered by OpenAI's `
 
 ---
 
-## Features
-
-* **Seamless WooCommerce Integration:** Automatically injects the "Virtual Try On" button on single product pages.
-* **Flexible Button Positioning:** Choose where the try-on button appears from the WP Admin panel (Before/After Add to Cart, Beside Quantity, or Summary Footer).
-* **Native "Add to Cart" Trigger:** Automatically converts to an **Add to Cart** button after image generation to trigger the store's native cart behavior without page redirects.
-* **Custom Product Upload Support:** Allows users to test the try-on feature with the store's default product or upload a custom garment.
-* **Self-Contained Architecture:** Operates entirely within WordPress via native AJAX endpoints. No external Node.js or third-party servers required.
-* **High Timeout Limit:** Configured with a 120-second execution time limit to handle generative AI models smoothly without timeouts.
-
----
-
 ## Installation
 
 1. **Download the Plugin:**
@@ -37,7 +26,7 @@ An AI-powered Virtual Try-On plugin for WooCommerce stores powered by OpenAI's `
    * *After "Add to Cart" Button*
    * *Beside Quantity Input*
    * *Product Summary Footer*
-4. **Button Label:** Customize the display text (Default: `✨ Virtual Try On`).
+4. **Button Label:** Customize the display text.
 5. Click **Save Changes**.
 
 ---
@@ -48,9 +37,7 @@ An AI-powered Virtual Try-On plugin for WooCommerce stores powered by OpenAI's `
 2. A modal overlay opens with the product pre-selected.
 3. Customer uploads their photo.
 4. Clicking **"Try It On Me!"** sends an AJAX request to the WordPress backend, which calls OpenAI's image editing API with formatted prompts.
-5. Upon generation, the preview is displayed inside the modal, and the primary action button seamlessly switches to **"🛒 Add to Cart"**.
-6. Clicking **Add to Cart** triggers the theme's native WooCommerce add-to-cart functionality.
-
+5. The preview is displayed inside the modal
 ---
 
 ## Tech Stack & Prerequisites
