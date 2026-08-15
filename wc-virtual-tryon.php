@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Virtual Try-On
  * Plugin URI:   https://github.com/Saifi-6397/woocommerce-virtual-tryon
  * Description: AI-powered Virtual Try-On plugin for WooCommerce using OpenAI.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Khaleel Ahmad
  * Text Domain: wc-vton
  */
@@ -45,7 +45,6 @@ class WCVirtualTryOn {
     }
 
     public function register_settings() {
-        // Correct Option Group binding
         register_setting('vton_settings_group', 'vton_openai_api_key', array(
             'type'              => 'string',
             'sanitize_callback' => 'sanitize_text_field',
@@ -61,9 +60,20 @@ class WCVirtualTryOn {
             'sanitize_callback' => 'sanitize_text_field',
             'default'           => '✨ Virtual Try On'
         ));
+        register_setting('vton_settings_group', 'vton_max_credits', array(
+            'type'              => 'integer',
+            'sanitize_callback' => 'absint',
+            'default'           => 5
+        ));
+        register_setting('vton_settings_group', 'vton_login_url', array(
+            'type'              => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+            'default'           => function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : wp_login_url()
+        ));
     }
 
     public function render_settings_page() {
+        $default_login_url = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : wp_login_url();
         ?>
         <div class="wrap">
             <h1>✨ WooCommerce Virtual Try-On Settings</h1>
@@ -85,6 +95,32 @@ class WCVirtualTryOn {
                                 style="-webkit-text-security: disc;" 
                             />
                             <p class="description">Enter OpenAI API Key for image processing.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Allowed Credits Per User</th>
+                        <td>
+                            <input 
+                                type="number" 
+                                name="vton_max_credits" 
+                                value="<?php echo esc_attr(get_option('vton_max_credits', 5)); ?>" 
+                                class="small-text" 
+                                min="1" 
+                            />
+                            <p class="description">Number of try-on credits assigned to each registered user.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Login / Signup Page URL</th>
+                        <td>
+                            <input 
+                                type="url" 
+                                name="vton_login_url" 
+                                value="<?php echo esc_url(get_option('vton_login_url', $default_login_url)); ?>" 
+                                class="regular-text" 
+                                placeholder="https://yourstore.com/my-account/" 
+                            />
+                            <p class="description">Guests will be redirected to this URL when clicking 'Try It On Me!' inside the modal.</p>
                         </td>
                     </tr>
                     <tr valign="top">
@@ -122,48 +158,96 @@ class WCVirtualTryOn {
         }
     }
 
-public function render_tryon_button() {
-    global $product;
-    if (!$product) return;
+    public function render_tryon_button() {
+        global $product;
+        if (!$product) return;
 
-    $product_id = $product->get_id(); // Get Product ID
-    $product_image_id = $product->get_image_id();
-    $product_image_url = wp_get_attachment_image_url($product_image_id, 'full');
-    $button_text = get_option('vton_button_text', 'Virtual Try On');
+        $product_id = $product->get_id();
+        $product_image_id = $product->get_image_id();
+        $product_image_url = wp_get_attachment_image_url($product_image_id, 'full');
+        $button_text = get_option('vton_button_text', '✨ Virtual Try On');
 
-    echo '<div class="vton-button-wrapper" style="margin: 10px 0;">
-            <button type="button" class="button vton-trigger-btn" data-product-id="' . esc_attr($product_id) . '" data-product-img="' . esc_url($product_image_url) . '">
-                ' . esc_html($button_text) . '
-            </button>
-          </div>';
-}
+        echo '<div class="vton-button-wrapper" style="margin: 10px 0;">
+                <button type="button" class="button vton-trigger-btn" data-product-id="' . esc_attr($product_id) . '" data-product-img="' . esc_url($product_image_url) . '">
+                    ' . esc_html($button_text) . '
+                </button>
+              </div>';
+    }
 
     /* ==========================================================================
        3. FRONTEND ASSETS & SCRIPT LOCALIZATION
        ========================================================================== */
 
-    public function enqueue_frontend_assets() {
+  public function enqueue_frontend_assets() {
         if (is_product()) {
-            wp_enqueue_style('vton-style', plugin_dir_url(__FILE__) . 'assets/css/vton-widget.css', array(), '1.0.0');
-            wp_enqueue_script('vton-script', plugin_dir_url(__FILE__) . 'assets/js/vton-widget.js', array('jquery'), '1.0.0', true);
+            wp_enqueue_style('vton-style', plugin_dir_url(__FILE__) . 'assets/css/vton-widget.css', array(), '1.1.0');
+            wp_enqueue_script('vton-script', plugin_dir_url(__FILE__) . 'assets/js/vton-widget.js', array('jquery'), '1.1.0', true);
 
-            // Pass WP AJAX URL & Nonce to React/JS
+            $is_logged_in = is_user_logged_in();
+            $max_credits = (int) get_option('vton_max_credits', 5);
+            $user_credits = 0;
+
+            if ($is_logged_in) {
+                $user_id = get_current_user_id();
+                $saved_credits = get_user_meta($user_id, 'vton_user_credits', true);
+
+                if ($saved_credits === '') {
+                    // First time user initialization
+                    $user_credits = $max_credits;
+                    update_user_meta($user_id, 'vton_user_credits', $user_credits);
+                } else {
+                    $user_credits = (int) $saved_credits;
+                    // Cap saved credits to max_credits if admin reduced the limit
+                    if ($user_credits > $max_credits) {
+                        $user_credits = $max_credits;
+                        update_user_meta($user_id, 'vton_user_credits', $user_credits);
+                    }
+                }
+            }
+
+            $default_login_url = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : wp_login_url();
+            $login_url = get_option('vton_login_url', $default_login_url);
+
             wp_localize_script('vton-script', 'vton_config', array(
-                'ajax_url' => admin_url('admin-ajax.php'),
-                'nonce'    => wp_create_nonce('vton_nonce')
+                'ajax_url'     => admin_url('admin-ajax.php'),
+                'nonce'        => wp_create_nonce('vton_nonce'),
+                'is_logged_in' => $is_logged_in,
+                'user_credits' => $user_credits,
+                'max_credits'  => $max_credits,
+                'login_url'    => esc_url($login_url)
             ));
         }
     }
 
     /* ==========================================================================
-       4. HIGH-TIMEOUT PHP AJAX HANDLER FOR OPENAI
+       4. HIGH-TIMEOUT PHP AJAX HANDLER
        ========================================================================== */
 
     public function handle_vton_ajax() {
-        // Prevent script timeout (Allow up to 120 seconds for AI processing)
         @set_time_limit(120);
 
         check_ajax_referer('vton_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(array(
+                'message'  => 'Please log in to continue.',
+                'redirect' => true
+            ));
+        }
+
+        $user_id = get_current_user_id();
+        $max_credits = (int) get_option('vton_max_credits', 5);
+        $user_credits = get_user_meta($user_id, 'vton_user_credits', true);
+
+        if ($user_credits === '') {
+            $user_credits = $max_credits;
+        } else {
+            $user_credits = (int) $user_credits;
+        }
+
+        if ($user_credits <= 0) {
+            wp_send_json_error(array('message' => 'You have used all your available try-on credits.'));
+        }
 
         $api_key = trim(get_option('vton_openai_api_key', ''));
 
@@ -175,11 +259,9 @@ public function render_tryon_button() {
             wp_send_json_error(array('message' => 'User image is missing.'));
         }
 
-        // Handle User Image File
         $user_file = $_FILES['user_image'];
         $user_file_path = $user_file['tmp_name'];
 
-        // Handle Product Image (Custom Upload OR Download from Store URL)
         $product_file_path = '';
         if (!empty($_FILES['custom_product_image'])) {
             $product_file_path = $_FILES['custom_product_image']['tmp_name'];
@@ -195,10 +277,8 @@ public function render_tryon_button() {
             wp_send_json_error(array('message' => 'Product image could not be processed.'));
         }
 
-        // Prepare Prompt Rules
         $prompt = "You are an AI virtual try-on system. Replace the person's current upper clothing shown in Image 1 with the EXACT outfit shown in Image 2. Return ONE photorealistic image preserving face, skin tone, hair, posture and background.";
 
-        // Prepare Multipart Payload for OpenAI
         $boundary = wp_generate_password(24, false);
         $headers = array(
             'Authorization' => 'Bearer ' . $api_key,
@@ -217,12 +297,12 @@ public function render_tryon_button() {
         $body .= 'Content-Disposition: form-data; name="prompt"' . "\r\n\r\n";
         $body .= $prompt . "\r\n";
 
-        // Size field (1024x1024)
+        // Size field
         $body .= '--' . $boundary . "\r\n";
         $body .= 'Content-Disposition: form-data; name="size"' . "\r\n\r\n";
         $body .= '1024x1024' . "\r\n";
 
-        // Quality field (low / standard)
+        // Quality field
         $body .= '--' . $boundary . "\r\n";
         $body .= 'Content-Disposition: form-data; name="quality"' . "\r\n\r\n";
         $body .= 'low' . "\r\n";
@@ -245,10 +325,9 @@ public function render_tryon_button() {
             'method'    => 'POST',
             'headers'   => $headers,
             'body'      => $body,
-            'timeout'   => 90, // Wait up to 90 seconds
+            'timeout'   => 90,
         ));
 
-        // Clean temp downloaded product image if created
         if (!empty($_POST['product_image_url']) && file_exists($product_file_path)) {
             @unlink($product_file_path);
         }
@@ -260,13 +339,21 @@ public function render_tryon_button() {
         $response_body = wp_remote_retrieve_body($response);
         $data = json_decode($response_body, true);
 
+        $generated_url = '';
         if (!empty($data['data'][0]['b64_json'])) {
-            wp_send_json_success(array(
-                'generated_image_url' => 'data:image/jpeg;base64,' . $data['data'][0]['b64_json']
-            ));
+            $generated_url = 'data:image/jpeg;base64,' . $data['data'][0]['b64_json'];
         } elseif (!empty($data['data'][0]['url'])) {
+            $generated_url = $data['data'][0]['url'];
+        }
+
+        if (!empty($generated_url)) {
+            // Deduct 1 credit upon success
+            $new_credits = max(0, $user_credits - 1);
+            update_user_meta($user_id, 'vton_user_credits', $new_credits);
+
             wp_send_json_success(array(
-                'generated_image_url' => $data['data'][0]['url']
+                'generated_image_url' => $generated_url,
+                'remaining_credits'   => $new_credits
             ));
         } else {
             $err_msg = isset($data['error']['message']) ? $data['error']['message'] : 'Failed to generate try-on image.';
