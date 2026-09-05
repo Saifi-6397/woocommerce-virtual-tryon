@@ -16,8 +16,8 @@
 /* Modal Window */
 .vton-modal-content {
     background: #ffffff;
-    /* width: 90%;
-    max-width: 650px; */
+    width: 90%;
+    max-width: 500px;
     max-height: 85vh;
     overflow-y: auto;
     border-radius: 16px;

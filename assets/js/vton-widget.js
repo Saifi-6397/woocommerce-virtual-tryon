@@ -1,15 +1,13 @@
 jQuery(document).ready(function ($) {
-    let userFile = null;
-    let customProductFile = null;
+    let userBase64Data = null;
     let currentProductUrl = '';
     let currentProductId = null;
-    let generatedImageUrl = ''; // Preserves generated result in session
+    let generatedImageUrl = '';
     let progressTimer = null;
     let maxCredits = parseInt(vton_config.max_credits, 10);
     let currentCredits = Math.min(parseInt(vton_config.user_credits, 10), maxCredits);
     const isLoggedIn = Boolean(vton_config.is_logged_in);
 
-    // Dynamic Top Header Badge
     const creditBadgeHTML = isLoggedIn 
         ? `<span id="vton-credit-badge" style="background: #e0e7ff; color: #3730a3; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; line-height: 17px;">
              Credits: <span id="vton-credit-count">${currentCredits}</span>/${maxCredits}
@@ -29,22 +27,19 @@ jQuery(document).ready(function ($) {
                 </div>
                 
                 <div class="vton-cards-grid">
-                    <!-- Card 1: Customer Upload -->
                     <div class="vton-card">
                         <div class="vton-upload-box" id="vton-user-box">
-                            <label class="vton-file-label">
+                            <label class="vton-file-label" id="vton-initial-label" style="cursor: pointer; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
                                 <span>Upload Your Photo</span>
-                                <input type="file" id="vton-user-input" accept="image/*" hidden />
                             </label>
                             <img id="vton-user-preview" class="vton-preview-img" style="display:none;" />
                         </div>
-                        <label id="vton-user-change-btn" class="vton-reupload-btn" style="display:none;">
+                        <label id="vton-user-change-btn" class="vton-reupload-btn" style="display:none; cursor: pointer;">
                             Change Photo
-                            <input type="file" id="vton-user-reinput" accept="image/*" hidden />
                         </label>
+                        <input type="file" id="vton-native-file-input" accept="image/*" style="display:none;" />
                     </div>
 
-                    <!-- Card 2: Selected Product -->
                     <div class="vton-card">
                         <div class="vton-upload-box" id="vton-product-box">
                             <img id="vton-product-preview" class="vton-preview-img" />
@@ -52,7 +47,6 @@ jQuery(document).ready(function ($) {
                     </div>
                 </div>
 
-                <!-- Action Button Section -->
                 <div class="vton-action-section">
                     <p id="vton-error-msg" class="vton-error-msg" style="display:none;"></p>
                     
@@ -61,7 +55,6 @@ jQuery(document).ready(function ($) {
                     </button>
                 </div>
 
-                <!-- Generated Result Section -->
                 <div id="vton-result-container" class="vton-result-container" style="display:none;">
                     <img id="vton-result-img" class="vton-result-img" src="" alt="Try On Result" />
                 </div>
@@ -71,7 +64,6 @@ jQuery(document).ready(function ($) {
 
     $('body').append(modalHTML);
 
-    // Helper: Reset Generate Button Appearance
     function resetButtonState($btn) {
         if (progressTimer) clearInterval(progressTimer);
         $btn.css('background', '#111827');
@@ -79,12 +71,11 @@ jQuery(document).ready(function ($) {
         
         if (isLoggedIn && currentCredits <= 0) {
             $btn.prop('disabled', true);
-        } else if (userFile) {
+        } else if (userBase64Data) {
             $btn.prop('disabled', false);
         }
     }
 
-    // Helper: Start Progress Bar Animation
     function startProgressAnimation($btn) {
         let percent = 5;
         $btn.prop('disabled', true);
@@ -101,7 +92,7 @@ jQuery(document).ready(function ($) {
         }, 900);
     }
 
-    // 2. Open Modal Trigger
+    // Modal Trigger
     $(document).on('click', '.vton-trigger-btn', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -112,7 +103,6 @@ jQuery(document).ready(function ($) {
         $('#vton-error-msg').hide();
         resetButtonState($('#vton-generate-btn'));
 
-        // Retain generated image if already created in current session
         if (generatedImageUrl) {
             $('#vton-result-img').attr('src', generatedImageUrl);
             $('#vton-result-container').show();
@@ -129,7 +119,7 @@ jQuery(document).ready(function ($) {
         $('#vton-modal-overlay').fadeIn(200);
     });
 
-    // 3. Close Modal
+    // Close Modal
     $(document).on('click', '.vton-close-btn', function () {
         $('#vton-modal-overlay').fadeOut(200);
     });
@@ -140,31 +130,39 @@ jQuery(document).ready(function ($) {
         }
     });
 
-    // 4. Handle Photo Upload
-    function handleUserImage(file) {
-        if (file) {
-            userFile = file;
-            generatedImageUrl = ''; // Reset cached image on new upload
-            const url = URL.createObjectURL(file);
-            $('#vton-user-preview').attr('src', url).show();
-            $('#vton-user-box .vton-file-label').hide();
-            $('#vton-user-change-btn').show();
-            
-            if (!isLoggedIn || currentCredits > 0) {
-                $('#vton-generate-btn').prop('disabled', false);
-            }
-            
-            $('#vton-result-container').hide();
-            $('#vton-error-msg').hide();
-            resetButtonState($('#vton-generate-btn'));
-        }
-    }
-
-    $(document).on('change', '#vton-user-input, #vton-user-reinput', function (e) {
-        handleUserImage(e.target.files[0]);
+    // Trigger File Picker Explicitly
+    $(document).on('click', '#vton-initial-label, #vton-user-change-btn', function (e) {
+        e.preventDefault();
+        $('#vton-native-file-input').trigger('click');
     });
 
-    // 5. Submit AJAX Generation
+    // Handle File Selection with Base64 Conversion
+    $(document).on('change', '#vton-native-file-input', function () {
+        const input = this;
+        if (input.files && input.files[0]) {
+            const selectedFile = input.files[0];
+            generatedImageUrl = '';
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                userBase64Data = e.target.result; // Guaranteed reliable data URL
+                $('#vton-user-preview').attr('src', userBase64Data).show();
+                $('#vton-initial-label').hide();
+                $('#vton-user-change-btn').show();
+
+                if (!isLoggedIn || currentCredits > 0) {
+                    $('#vton-generate-btn').prop('disabled', false);
+                }
+
+                $('#vton-result-container').hide();
+                $('#vton-error-msg').hide();
+                resetButtonState($('#vton-generate-btn'));
+            };
+            reader.readAsDataURL(selectedFile);
+        }
+    });
+
+    // Handle Submission
     $(document).on('click', '#vton-generate-btn', function (e) {
         e.preventDefault();
 
@@ -173,7 +171,7 @@ jQuery(document).ready(function ($) {
             return;
         }
 
-        if (!userFile) {
+        if (!userBase64Data) {
             $('#vton-error-msg').text('Please upload your photo first!').show();
             return;
         }
@@ -187,32 +185,25 @@ jQuery(document).ready(function ($) {
         $('#vton-error-msg').hide();
         startProgressAnimation($btn);
 
-        const formData = new FormData();
-        formData.append('action', 'vton_generate_image');
-        formData.append('nonce', vton_config.nonce);
-        formData.append('user_image', userFile);
-
-        if (customProductFile) {
-            formData.append('custom_product_image', customProductFile);
-        } else {
-            formData.append('product_image_url', currentProductUrl);
-        }
-
         $.ajax({
             url: vton_config.ajax_url,
             type: 'POST',
-            data: formData,
-            contentType: false,
-            processData: false,
+            data: {
+                action: 'vton_generate_image',
+                nonce: vton_config.nonce,
+                user_image_base64: userBase64Data,
+                product_id: currentProductId,
+                product_image_url: currentProductUrl
+            },
             timeout: 110000,
             success: function (response) {
                 if (response.success && response.data.generated_image_url) {
                     clearInterval(progressTimer);
                     $btn.css('background', 'linear-gradient(to right, #4338ca 100%, #111827 100%)');
-                    $btn.text('Completed 100% ✨');
+                    $btn.text('Completed 100%');
 
-                    generatedImageUrl = response.data.generated_image_url; // Save generated result
-                    
+                    generatedImageUrl = response.data.generated_image_url;
+
                     if (response.data.remaining_credits !== undefined) {
                         currentCredits = parseInt(response.data.remaining_credits, 10);
                         $('#vton-credit-count').text(currentCredits);
